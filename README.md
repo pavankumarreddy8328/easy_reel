@@ -4,6 +4,10 @@
 
 A full-featured short video streaming app built with Flutter, GetX state management, and Firebase Firestore.
 
+<img width="360" height="820" alt="Screenshot_1778532945" src="https://github.com/user-attachments/assets/4bfc6964-601d-4f64-b266-4bacbd4d18d9" />
+<img width="360" height="820" alt="Screenshot_1778532941" src="https://github.com/user-attachments/assets/df973dd6-5397-475f-a6ff-3bc5fcd1b329" />
+<img width="360" height="820" alt="Screenshot_1778532961" src="https://github.com/user-attachments/assets/bf0e9f4d-c0bd-4ec0-b278-b4e77485ad56" />
+
 ## 📱 Screenshots & Features
 
 ### Core Features
