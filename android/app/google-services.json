@@ -1,87 +1,26 @@
 {
   "project_info": {
-    "project_number": "656720910751",
-    "project_id": "carrot-app-a2ad5",
-    "storage_bucket": "carrot-app-a2ad5.firebasestorage.app"
+    "project_number": "1074266225348",
+    "project_id": "easy-reel",
+    "storage_bucket": "easy-reel.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:656720910751:android:a2e59dd479c360b3e405aa",
-        "android_client_info": {
-          "package_name": "com.carrot.carrot25"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "656720910751-rp9ttsakf757b532gd0vlid6g69ck08f.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.carrot.carrot25",
-            "certificate_hash": "b68626d55a629ca8671c3c06df1c7db443fd4f70"
-          }
-        },
-        {
-          "client_id": "656720910751-5tjg8j671iqhbcqa7np1a96l4qge7ru9.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyDNPDpMI09fLz1AWUe-RYb1PbUGfQBOHa8"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "656720910751-5tjg8j671iqhbcqa7np1a96l4qge7ru9.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "656720910751-seo0hl6tn1tltd60tgbmlg13ahnflbel.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.carrot.carrot25"
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:656720910751:android:9df45688327b5487e405aa",
+        "mobilesdk_app_id": "1:1074266225348:android:a0281bf296502fcdd7e791",
         "android_client_info": {
           "package_name": "com.example.easy_reel"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "656720910751-5tjg8j671iqhbcqa7np1a96l4qge7ru9.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDNPDpMI09fLz1AWUe-RYb1PbUGfQBOHa8"
+          "current_key": "AIzaSyClPQ_liY8UaGbb5C4z22eznNWufB1r_bg"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "656720910751-5tjg8j671iqhbcqa7np1a96l4qge7ru9.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "656720910751-seo0hl6tn1tltd60tgbmlg13ahnflbel.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.carrot.carrot25"
-              }
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }

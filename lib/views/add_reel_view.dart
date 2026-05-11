@@ -5,7 +5,7 @@ import '../data/models/reel_model.dart';
 import '../routes/app_pages.dart';
 
 class AddReelView extends StatefulWidget {
-  const AddReelView({Key? key}) : super(key: key);
+  const AddReelView({super.key});
 
   @override
   State<AddReelView> createState() => _AddReelViewState();

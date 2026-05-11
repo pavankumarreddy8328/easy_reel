@@ -45,7 +45,6 @@ dependencies:
   
   # Video Player
   video_player: ^2.6.0
-  cached_video_player: ^2.0.0
   
   # Network & HTTP
   http: ^1.1.0
@@ -53,6 +52,7 @@ dependencies:
   
   # Image Caching
   cached_network_image: ^3.3.1
+  flutter_cache_manager: ^3.4.1
   
   # YouTube Player
   youtube_player_flutter: ^9.0.4

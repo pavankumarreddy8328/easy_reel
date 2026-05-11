@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:video_player/video_player.dart';
 import '../data/models/reel_model.dart';
@@ -19,7 +20,9 @@ class ReelsController extends GetxController {
 
   // Video player controllers
   final Map<String, VideoPlayerController> _videoControllers = {};
+  final Map<String, Future<void>> _preloadTasks = {};
   final RxMap<String, bool> videoPreloadStatus = <String, bool>{}.obs;
+  final RxMap<String, bool> videoPlaybackStatus = <String, bool>{}.obs;
 
   @override
   void onInit() {
@@ -34,14 +37,14 @@ class ReelsController extends GetxController {
       errorMessage.value = '';
 
       // Check cache first
-      if (!_cacheService.isCacheExpired()) {
+      if (!_cacheService.isCacheExpired(
+        expirationHours: AppConstants.videoCacheExpireHours,
+      )) {
         final cachedReels = _cacheService.getCachedReels();
         if (cachedReels.isNotEmpty) {
           reels.value = cachedReels;
           if (reels.isNotEmpty) {
-            currentReel.value = reels[0];
-            currentIndex.value = 0;
-            preloadVideos();
+            _prepareInitialPlayback();
             return;
           }
         }
@@ -55,70 +58,144 @@ class ReelsController extends GetxController {
       await _cacheService.cacheReels(fetchedReels);
 
       if (reels.isNotEmpty) {
-        currentReel.value = reels[0];
-        currentIndex.value = 0;
-        preloadVideos();
+        _prepareInitialPlayback();
       }
     } catch (e) {
       errorMessage.value = 'Error loading reels: $e';
-      print('Error in loadReels: $e');
+      debugPrint('Error in loadReels: $e');
     } finally {
       isLoading.value = false;
     }
   }
 
-  // Preload videos ahead
+  void _prepareInitialPlayback() {
+    currentReel.value = reels[0];
+    currentIndex.value = 0;
+    preloadVideos();
+    Future<void>.delayed(Duration.zero, () {
+      if (reels.isNotEmpty && currentIndex.value == 0) {
+        playVideo(0);
+      }
+    });
+  }
+
+  // Preload 3-4 videos ahead for seamless playback
   void preloadVideos() {
-    int endIndex = (currentIndex.value + AppConstants.preloadCount)
-        .clamp(0, reels.length - 1);
+    int endIndex = (currentIndex.value + AppConstants.preloadCount).clamp(
+      0,
+      reels.length - 1,
+    );
+
+    // Preload current and next videos
     for (int i = currentIndex.value; i <= endIndex; i++) {
       if (i < reels.length) {
         _preloadVideo(i);
       }
     }
+
+    // Cleanup: Dispose videos that are too far behind to save memory
+    _cleanupOldVideos();
   }
 
-  Future<void> _preloadVideo(int index) async {
-    if (index >= reels.length) return;
+  // Cleanup video controllers that are too far from current position
+  void _cleanupOldVideos() {
+    final keysToRemove = <String>[];
+    for (var entry in _videoControllers.entries) {
+      final reelIndex = reels.indexWhere((r) => r.id == entry.key);
+      // Remove if video is more than 5 positions away
+      if (reelIndex != -1 && (reelIndex - currentIndex.value).abs() > 5) {
+        keysToRemove.add(entry.key);
+      }
+    }
+
+    for (var key in keysToRemove) {
+      _videoControllers[key]?.dispose();
+      _videoControllers.remove(key);
+      videoPreloadStatus.remove(key);
+      videoPlaybackStatus.remove(key);
+    }
+  }
+
+  Future<void> _preloadVideo(int index) {
+    if (index >= reels.length || index < 0) return Future.value();
 
     final reel = reels[index];
 
     if (reel.isYoutubeUrl) {
       // YouTube URLs don't need preloading the same way
       videoPreloadStatus[reel.id] = true;
-      return;
+      return Future.value();
     }
 
+    if (_videoControllers.containsKey(reel.id)) {
+      videoPreloadStatus[reel.id] = true;
+      return Future.value();
+    }
+
+    final existingTask = _preloadTasks[reel.id];
+    if (existingTask != null) return existingTask;
+
+    final task = _createCachedVideoController(
+      reel,
+    ).whenComplete(() => _preloadTasks.remove(reel.id));
+    _preloadTasks[reel.id] = task;
+    return task;
+  }
+
+  Future<void> _createCachedVideoController(Reel reel) async {
     try {
-      if (!_videoControllers.containsKey(reel.id)) {
-        final controller = VideoPlayerController.contentUri(
-          Uri.parse(reel.videoUrl),
-        );
-        await controller.initialize();
-        _videoControllers[reel.id] = controller;
-        videoPreloadStatus[reel.id] = true;
-      }
+      final cachedFile = await _cacheService.getCachedVideoFile(reel.videoUrl);
+      final controller = VideoPlayerController.file(cachedFile);
+      await controller.initialize();
+      await controller.setLooping(true);
+
+      _videoControllers[reel.id] = controller;
+      controller.addListener(() => _handleVideoControllerChanged(reel.id));
+
+      videoPreloadStatus[reel.id] = true;
+      debugPrint('Video preloaded: ${reel.id}');
     } catch (e) {
-      print('Error preloading video ${reel.id}: $e');
+      debugPrint('Error preloading video ${reel.id}: $e');
       videoPreloadStatus[reel.id] = false;
     }
   }
 
-  // Play video
+  void _handleVideoControllerChanged(String reelId) {
+    final controller = _videoControllers[reelId];
+    if (controller == null) return;
+
+    final isPlaying = controller.value.isPlaying;
+    if (videoPlaybackStatus[reelId] != isPlaying) {
+      videoPlaybackStatus[reelId] = isPlaying;
+    }
+  }
+
+  // Play video with auto-play on scroll
   Future<void> playVideo(int index) async {
     try {
       if (index < 0 || index >= reels.length) return;
 
+      final previousIndex = currentIndex.value;
       currentIndex.value = index;
       currentReel.value = reels[index];
 
+      // Pause previous video
+      if (previousIndex >= 0 &&
+          previousIndex < reels.length &&
+          previousIndex != index) {
+        await pauseVideo(reels[previousIndex].id);
+      }
+
+      // Preload current and upcoming videos
       await _preloadVideo(index);
       preloadVideos();
 
       final reel = reels[index];
       if (!reel.isYoutubeUrl && _videoControllers.containsKey(reel.id)) {
         final controller = _videoControllers[reel.id]!;
+        await controller.seekTo(Duration.zero);
         await controller.play();
+        videoPlaybackStatus[reel.id] = true;
         isPlaying.value = true;
       }
 
@@ -126,22 +203,23 @@ class ReelsController extends GetxController {
       await _reelRepository.updateReelViews(reel.id, reel.views + 1);
     } catch (e) {
       errorMessage.value = 'Error playing video: $e';
-      print('Error in playVideo: $e');
+      debugPrint('Error in playVideo: $e');
     }
   }
 
-  // Pause video
-  Future<void> pauseVideo() async {
+  // Pause video by reel ID
+  Future<void> pauseVideo([String? reelId]) async {
     try {
-      if (currentReel.value != null && !currentReel.value!.isYoutubeUrl) {
-        final reel = currentReel.value!;
-        if (_videoControllers.containsKey(reel.id)) {
-          await _videoControllers[reel.id]!.pause();
+      final id = reelId ?? currentReel.value?.id;
+      if (id != null && _videoControllers.containsKey(id)) {
+        await _videoControllers[id]!.pause();
+        videoPlaybackStatus[id] = false;
+        if (reelId == null || currentReel.value?.id == id) {
           isPlaying.value = false;
         }
       }
     } catch (e) {
-      print('Error pausing video: $e');
+      debugPrint('Error pausing video: $e');
     }
   }
 
@@ -150,14 +228,30 @@ class ReelsController extends GetxController {
     try {
       if (currentReel.value != null && !currentReel.value!.isYoutubeUrl) {
         final reel = currentReel.value!;
+        final reelIndex = reels.indexWhere((r) => r.id == reel.id);
+        if (!_videoControllers.containsKey(reel.id) && reelIndex != -1) {
+          await _preloadVideo(reelIndex);
+        }
+
         if (_videoControllers.containsKey(reel.id)) {
           await _videoControllers[reel.id]!.play();
+          videoPlaybackStatus[reel.id] = true;
           isPlaying.value = true;
         }
       }
     } catch (e) {
-      print('Error resuming video: $e');
+      debugPrint('Error resuming video: $e');
     }
+  }
+
+  Future<void> resumeVideoById(String reelId) async {
+    final reelIndex = reels.indexWhere((reel) => reel.id == reelId);
+    if (reelIndex == -1) return;
+
+    currentIndex.value = reelIndex;
+    currentReel.value = reels[reelIndex];
+    await resumeVideo();
+    preloadVideos();
   }
 
   // Get video controller
@@ -184,7 +278,7 @@ class ReelsController extends GetxController {
         await _cacheService.cacheReel(updatedReel);
       }
     } catch (e) {
-      print('Error toggling like: $e');
+      debugPrint('Error toggling like: $e');
     }
   }
 
@@ -198,7 +292,7 @@ class ReelsController extends GetxController {
       return true;
     } catch (e) {
       errorMessage.value = 'Error adding reel: $e';
-      print('Error in addNewReel: $e');
+      debugPrint('Error in addNewReel: $e');
       return false;
     }
   }
@@ -222,6 +316,10 @@ class ReelsController extends GetxController {
     for (var controller in _videoControllers.values) {
       controller.dispose();
     }
+    _videoControllers.clear();
+    _preloadTasks.clear();
+    videoPreloadStatus.clear();
+    videoPlaybackStatus.clear();
     super.onClose();
   }
 }

@@ -51,21 +51,19 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDNPDpMI09fLz1AWUe-RYb1PbUGfQBOHa8',
-    appId: '1:656720910751:android:9df45688327b5487e405aa',
-    messagingSenderId: '656720910751',
-    projectId: 'carrot-app-a2ad5',
-    storageBucket: 'carrot-app-a2ad5.firebasestorage.app',
+    apiKey: 'AIzaSyClPQ_liY8UaGbb5C4z22eznNWufB1r_bg',
+    appId: '1:1074266225348:android:a0281bf296502fcdd7e791',
+    messagingSenderId: '1074266225348',
+    projectId: 'easy-reel',
+    storageBucket: 'easy-reel.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCHh6pOAoPCmHOFlJ8LaAdYZFs3TAH1KT0',
-    appId: '1:656720910751:ios:00a168ee86b5550ce405aa',
-    messagingSenderId: '656720910751',
-    projectId: 'carrot-app-a2ad5',
-    storageBucket: 'carrot-app-a2ad5.firebasestorage.app',
-    androidClientId: '656720910751-rp9ttsakf757b532gd0vlid6g69ck08f.apps.googleusercontent.com',
-    iosClientId: '656720910751-gv6ruh6qgi3t657u01ct3bvd12pts84l.apps.googleusercontent.com',
+    apiKey: 'AIzaSyBLS1IojELJsG-7eI1pDDRT-Ebnv2ckN2Q',
+    appId: '1:1074266225348:ios:ed08afedb22c771cd7e791',
+    messagingSenderId: '1074266225348',
+    projectId: 'easy-reel',
+    storageBucket: 'easy-reel.firebasestorage.app',
     iosBundleId: 'com.example.easyReel',
   );
 

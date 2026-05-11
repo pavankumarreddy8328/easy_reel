@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/reel_model.dart';
 import '../../core/constants/app_constants.dart';
 
@@ -14,10 +15,12 @@ class ReelRepository {
           .get();
 
       return snapshot.docs
-          .map((doc) => Reel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+          .map(
+            (doc) => Reel.fromMap(doc.data() as Map<String, dynamic>, doc.id),
+          )
           .toList();
     } catch (e) {
-      print('Error fetching reels: $e');
+      debugPrint('Error fetching reels: $e');
       rethrow;
     }
   }
@@ -40,10 +43,12 @@ class ReelRepository {
       final QuerySnapshot snapshot = await query.get();
 
       return snapshot.docs
-          .map((doc) => Reel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+          .map(
+            (doc) => Reel.fromMap(doc.data() as Map<String, dynamic>, doc.id),
+          )
           .toList();
     } catch (e) {
-      print('Error fetching reels with pagination: $e');
+      debugPrint('Error fetching reels with pagination: $e');
       rethrow;
     }
   }
@@ -51,14 +56,12 @@ class ReelRepository {
   // Add a new reel
   Future<String> addReel(Reel reel) async {
     try {
-      final docRef =
-          await _firestore.collection(AppConstants.reelsCollection).add({
-        ...reel.toMap(),
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      final docRef = await _firestore
+          .collection(AppConstants.reelsCollection)
+          .add({...reel.toMap(), 'createdAt': FieldValue.serverTimestamp()});
       return docRef.id;
     } catch (e) {
-      print('Error adding reel: $e');
+      debugPrint('Error adding reel: $e');
       rethrow;
     }
   }
@@ -71,7 +74,7 @@ class ReelRepository {
           .doc(reelId)
           .update({'likes': newLikes});
     } catch (e) {
-      print('Error updating likes: $e');
+      debugPrint('Error updating likes: $e');
       rethrow;
     }
   }
@@ -84,7 +87,7 @@ class ReelRepository {
           .doc(reelId)
           .update({'views': newViews});
     } catch (e) {
-      print('Error updating views: $e');
+      debugPrint('Error updating views: $e');
       rethrow;
     }
   }
@@ -97,7 +100,7 @@ class ReelRepository {
           .doc(reelId)
           .delete();
     } catch (e) {
-      print('Error deleting reel: $e');
+      debugPrint('Error deleting reel: $e');
       rethrow;
     }
   }
@@ -108,9 +111,10 @@ class ReelRepository {
         .collection(AppConstants.reelsCollection)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) =>
-                Reel.fromMap(doc.data(), doc.id))
-            .toList());
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => Reel.fromMap(doc.data(), doc.id))
+              .toList(),
+        );
   }
 }

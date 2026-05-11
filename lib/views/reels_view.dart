@@ -7,7 +7,7 @@ import '../routes/app_pages.dart';
 import '../data/models/reel_model.dart';
 
 class ReelsView extends GetView<ReelsController> {
-  const ReelsView({Key? key}) : super(key: key);
+  const ReelsView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -43,39 +43,49 @@ class ReelsView extends GetView<ReelsController> {
 
         return Stack(
           children: [
-            // Video Feed
+            // Video Feed with smart preloading
             PageView.builder(
               scrollDirection: Axis.vertical,
               onPageChanged: (index) {
+                // Auto-play new page and pause old one
                 controller.playVideo(index);
               },
               itemCount: controller.reels.length,
               itemBuilder: (context, index) {
-                return ReelCard(
-                  reel: controller.reels[index],
-                  controller: controller,
-                );
+                return Obx(() {
+                  final isActive = controller.currentIndex.value == index;
+                  return ReelCard(
+                    key: ValueKey(controller.reels[index].id),
+                    reel: controller.reels[index],
+                    controller: controller,
+                    isActive: isActive,
+                  );
+                });
               },
             ),
 
             // Error message
-            if (controller.errorMessage.isNotEmpty)
-              Positioned(
-                top: 16,
-                left: 16,
-                right: 16,
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withAlpha(200),
-                    borderRadius: BorderRadius.circular(8),
+            Obx(() {
+              if (controller.errorMessage.value.isNotEmpty) {
+                return Positioned(
+                  top: 16,
+                  left: 16,
+                  right: 16,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withAlpha(200),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      controller.errorMessage.value,
+                      style: const TextStyle(color: Colors.white),
+                    ),
                   ),
-                  child: Text(
-                    controller.errorMessage.value,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-              ),
+                );
+              }
+              return const SizedBox.shrink();
+            }),
 
             // Add Reel FAB
             Positioned(
@@ -97,45 +107,101 @@ class ReelsView extends GetView<ReelsController> {
 class ReelCard extends StatefulWidget {
   final Reel reel;
   final ReelsController controller;
+  final bool isActive;
 
   const ReelCard({
-    Key? key,
+    super.key,
     required this.reel,
     required this.controller,
-  }) : super(key: key);
+    required this.isActive,
+  });
 
   @override
   State<ReelCard> createState() => _ReelCardState();
 }
 
-class _ReelCardState extends State<ReelCard> {
-  late YoutubePlayerController _youtubeController;
+class _ReelCardState extends State<ReelCard> with WidgetsBindingObserver {
+  YoutubePlayerController? _youtubeController;
   bool _isYoutubeUrl = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _isYoutubeUrl = widget.reel.isYoutubeUrl;
-    
+
     if (_isYoutubeUrl) {
       final videoId = YoutubePlayer.convertUrlToId(widget.reel.videoUrl);
       if (videoId != null) {
         _youtubeController = YoutubePlayerController(
           initialVideoId: videoId,
-          flags: const YoutubePlayerFlags(
-            autoPlay: true,
+          flags: YoutubePlayerFlags(
+            autoPlay: widget.isActive,
             mute: false,
             showLiveFullscreenButton: false,
           ),
         );
       }
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.isActive) return;
+
+      if (_isYoutubeUrl) {
+        _youtubeController?.play();
+      } else {
+        widget.controller.resumeVideoById(widget.reel.id);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(ReelCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Handle visibility change (auto-pause/play)
+    if (oldWidget.isActive && !widget.isActive) {
+      if (_isYoutubeUrl) {
+        _youtubeController?.pause();
+      } else {
+        widget.controller.pauseVideo(widget.reel.id);
+      }
+    } else if (!oldWidget.isActive && widget.isActive) {
+      if (_isYoutubeUrl) {
+        _youtubeController?.play();
+      } else {
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted && widget.isActive) {
+            widget.controller.resumeVideo();
+          }
+        });
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      if (_isYoutubeUrl) {
+        _youtubeController?.pause();
+      } else {
+        widget.controller.pauseVideo(widget.reel.id);
+      }
+    } else if (state == AppLifecycleState.resumed && widget.isActive) {
+      if (_isYoutubeUrl) {
+        _youtubeController?.play();
+      } else {
+        widget.controller.resumeVideo();
+      }
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_isYoutubeUrl) {
-      _youtubeController.dispose();
+      _youtubeController?.dispose();
     }
     super.dispose();
   }
@@ -149,27 +215,24 @@ class _ReelCardState extends State<ReelCard> {
         _isYoutubeUrl ? _buildYoutubePlayer() : _buildVideoPlayer(),
 
         // Gradient overlay for better text visibility
-        Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.transparent,
-                Colors.black.withAlpha(100),
-                Colors.black.withAlpha(200),
-              ],
+        IgnorePointer(
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withAlpha(100),
+                  Colors.black.withAlpha(200),
+                ],
+              ),
             ),
           ),
         ),
 
         // UI Elements
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          child: _buildReelInfo(),
-        ),
+        Positioned(bottom: 0, left: 0, right: 0, child: _buildReelInfo()),
 
         // Top controls
         Positioned(
@@ -196,11 +259,7 @@ class _ReelCardState extends State<ReelCard> {
         ),
 
         // Right side actions
-        Positioned(
-          right: 12,
-          bottom: 100,
-          child: _buildActionButtons(),
-        ),
+        Positioned(right: 12, bottom: 100, child: _buildActionButtons()),
       ],
     );
   }
@@ -211,27 +270,68 @@ class _ReelCardState extends State<ReelCard> {
         final controller = widget.controller.getVideoController(widget.reel.id);
         if (controller != null) {
           if (controller.value.isPlaying) {
-            widget.controller.pauseVideo();
+            widget.controller.pauseVideo(widget.reel.id);
           } else {
-            widget.controller.resumeVideo();
+            widget.controller.resumeVideoById(widget.reel.id);
           }
         }
       },
       child: Container(
         color: Colors.black,
         child: Obx(() {
-          final videoController =
-              widget.controller.getVideoController(widget.reel.id);
+          final isPreloaded =
+              widget.controller.videoPreloadStatus[widget.reel.id] ?? false;
+          final videoController = widget.controller.getVideoController(
+            widget.reel.id,
+          );
+
           if (videoController != null && videoController.value.isInitialized) {
-            return Center(
-              child: AspectRatio(
-                aspectRatio: videoController.value.aspectRatio,
-                child: VideoPlayer(videoController),
-              ),
+            final isPlaying =
+                widget.controller.videoPlaybackStatus[widget.reel.id] ??
+                videoController.value.isPlaying;
+
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                Center(
+                  child: AspectRatio(
+                    aspectRatio: videoController.value.aspectRatio,
+                    child: VideoPlayer(videoController),
+                  ),
+                ),
+                if (!isPlaying)
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withAlpha(150),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.play_arrow,
+                        color: Colors.white,
+                        size: 48,
+                      ),
+                    ),
+                  ),
+              ],
             );
           }
-          return const Center(
-            child: CircularProgressIndicator(color: Colors.white),
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(
+                  color: Colors.white,
+                  value: isPreloaded ? null : 0.3,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isPreloaded ? 'Loading...' : 'Preloading video...',
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                ),
+              ],
+            ),
           );
         }),
       ),
@@ -239,8 +339,15 @@ class _ReelCardState extends State<ReelCard> {
   }
 
   Widget _buildYoutubePlayer() {
+    final youtubeController = _youtubeController;
+    if (youtubeController == null) {
+      return const Center(
+        child: Icon(Icons.error_outline, color: Colors.white, size: 48),
+      );
+    }
+
     return YoutubePlayer(
-      controller: _youtubeController,
+      controller: youtubeController,
       showVideoProgressIndicator: true,
       progressIndicatorColor: Colors.red,
       progressColors: const ProgressBarColors(
@@ -288,10 +395,7 @@ class _ReelCardState extends State<ReelCard> {
                     const SizedBox(height: 4),
                     Text(
                       'Follow',
-                      style: TextStyle(
-                        color: Colors.grey[300],
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: Colors.grey[300], fontSize: 12),
                     ),
                   ],
                 ),
@@ -316,10 +420,7 @@ class _ReelCardState extends State<ReelCard> {
           if (widget.reel.description.isNotEmpty)
             Text(
               widget.reel.description,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-              ),
+              style: const TextStyle(color: Colors.white, fontSize: 14),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
@@ -329,13 +430,21 @@ class _ReelCardState extends State<ReelCard> {
   }
 
   Widget _buildActionButtons() {
-    return Column(
-      children: [
-        // Like Button
-        Obx(() {
-          final isLiked = false; // You can add liked state management
-          return GestureDetector(
-            onTap: () => widget.controller.toggleLike(widget.reel.id),
+    return Obx(() {
+      // Find the current reel in the controller's list to get reactive updates
+      final reel =
+          widget.controller.reels.firstWhereOrNull(
+            (r) => r.id == widget.reel.id,
+          ) ??
+          widget.reel;
+
+      final isLiked = reel.likes > 0;
+
+      return Column(
+        children: [
+          // Like Button
+          GestureDetector(
+            onTap: () => widget.controller.toggleLike(reel.id),
             child: Column(
               children: [
                 Container(
@@ -352,7 +461,7 @@ class _ReelCardState extends State<ReelCard> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  widget.reel.likes.toString(),
+                  reel.likes.toString(),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
@@ -361,14 +470,73 @@ class _ReelCardState extends State<ReelCard> {
                 ),
               ],
             ),
-          );
-        }),
-        const SizedBox(height: 20),
+          ),
+          const SizedBox(height: 20),
 
-        // Comment Button
-        GestureDetector(
-          onTap: () {},
-          child: Column(
+          // Comment Button
+          GestureDetector(
+            onTap: () {},
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withAlpha(100),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.message_outlined,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '0',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Share Button
+          GestureDetector(
+            onTap: () {},
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withAlpha(100),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.share_outlined,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Share',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Views
+          Column(
             children: [
               Container(
                 padding: const EdgeInsets.all(12),
@@ -377,15 +545,15 @@ class _ReelCardState extends State<ReelCard> {
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
-                  Icons.message_outlined,
+                  Icons.remove_red_eye_outlined,
                   color: Colors.white,
                   size: 28,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                '0',
-                style: TextStyle(
+              Text(
+                reel.views.toString(),
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -393,67 +561,8 @@ class _ReelCardState extends State<ReelCard> {
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 20),
-
-        // Share Button
-        GestureDetector(
-          onTap: () {},
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withAlpha(100),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.share_outlined,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Share',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // Views
-        Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black.withAlpha(100),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.remove_red_eye_outlined,
-                color: Colors.white,
-                size: 28,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              widget.reel.views.toString(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
+        ],
+      );
+    });
   }
 }
